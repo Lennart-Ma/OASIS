@@ -32,7 +32,7 @@ def add_all_arguments(parser, train):
     parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
     parser.add_argument('--no_spectral_norm', action='store_true', help='this option deactivates spectral norm in all layers')
     parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
-    parser.add_argument('--dataroot', type=str, default='./datasets/cityscapes/', help='path to dataset root')
+    parser.add_argument('--dataroot', type=str, help='path to dataset root')
     parser.add_argument('--dataset_mode', type=str, default='coco', help='this option indicates which dataset should be loaded')
     parser.add_argument('--no_flip', action='store_true', help='if specified, do not flip the images for data argumentation')
 
