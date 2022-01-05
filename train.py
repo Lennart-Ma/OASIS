@@ -23,6 +23,7 @@ fid_computer = fid_pytorch(opt, dataloader_val)
 #--- create models ---#
 model = models.OASIS_model(opt)
 model = models.put_on_multi_gpus(model, opt)
+# test for git
 
 #--- create optimizers ---#
 optimizerG = torch.optim.Adam(model.module.netG.parameters(), lr=opt.lr_g, betas=(opt.beta1, opt.beta2))
