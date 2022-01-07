@@ -6,7 +6,7 @@ from PIL import Image
 import numpy as np
 
 
-class Ade20kDataset(torch.utils.data.Dataset):
+class CustomDataset(torch.utils.data.Dataset):
     def __init__(self, opt, for_metrics):
         if opt.phase == "test" or for_metrics:
             opt.load_size = 256
