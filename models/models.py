@@ -29,7 +29,7 @@ class OASIS_model(nn.Module):
             if opt.add_vgg_loss:
                 self.VGG_loss = losses.VGGLoss(self.opt.gpu_ids)
 
-    def forward(self, image, label, mode, losses_computer):
+    def forward(self, image, label, mode, losses_computer=None):
         # Branching is applied to be compatible with DataParallel
         if mode == "losses_G":
             loss_G = 0

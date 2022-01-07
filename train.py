@@ -1,6 +1,10 @@
+import warnings
+warnings.simplefilter("ignore", UserWarning)
 
-
+from tqdm import tqdm
+import os
 import torch
+import pandas as pd
 import models.losses as losses
 import models.models as models
 import dataloaders.dataloaders as dataloaders
@@ -8,6 +12,7 @@ import utils.utils as utils
 from utils.fid_scores import fid_pytorch
 import config
 
+from utils import calc_metrics
 
 #--- read options ---#
 opt = config.read_arguments(train=True)
@@ -19,6 +24,7 @@ losses_computer = losses.losses_computer(opt)
 dataloader, dataloader_val = dataloaders.get_dataloaders(opt)
 im_saver = utils.image_saver(opt)
 fid_computer = fid_pytorch(opt, dataloader_val)
+metric_df = pd.DataFrame(columns=["Epoch", "SSIM mean", "SSIM std","SSIM mean aug", "SSIM std aug", "Jennson shannon divergence aug", "Jennson shannon divergence no aug", "FID"])
 
 #--- create models ---#
 model = models.OASIS_model(opt)
@@ -32,8 +38,10 @@ optimizerD = torch.optim.Adam(model.module.netD.parameters(), lr=opt.lr_d, betas
 #--- the training loop ---#
 already_started = False
 start_epoch, start_iter = utils.get_start_iters(opt.loaded_latest_iter, len(dataloader))
+print("start epoch: ", start_epoch)
+fid_scores = []
 for epoch in range(start_epoch, opt.num_epochs):
-    for i, data_i in enumerate(dataloader):
+    for i, data_i in tqdm(enumerate(dataloader), position=0, leave=True):
         if not already_started and i < start_iter:
             continue
         already_started = True
@@ -55,28 +63,43 @@ for epoch in range(start_epoch, opt.num_epochs):
         optimizerD.step()
 
         #--- stats update ---#
+        visualizer_losses(cur_iter, losses_G_list+losses_D_list)
         if not opt.no_EMA:
             utils.update_EMA(model, cur_iter, dataloader, opt)
-        if cur_iter % opt.freq_print == 0:
-            im_saver.visualize_batch(model, image, label, cur_iter)
-            timer(epoch, cur_iter)
-        if cur_iter % opt.freq_save_ckpt == 0:
-            utils.save_networks(opt, cur_iter, model)
-        if cur_iter % opt.freq_save_latest == 0:
-            utils.save_networks(opt, cur_iter, model, latest=True)
-        if cur_iter % opt.freq_fid == 0 and cur_iter > 0:
-            is_best = fid_computer.update(model, cur_iter)
-            if is_best:
-                utils.save_networks(opt, cur_iter, model, best=True)
-        visualizer_losses(cur_iter, losses_G_list+losses_D_list)
+
+
+    if epoch % opt.freq_print == 0:
+        im_saver.visualize_batch(model, image, label, cur_iter)
+        timer(epoch, cur_iter)
+    # if cur_iter % opt.freq_save_ckpt == 0:
+    #     utils.save_networks(opt, cur_iter, model)
+    # if cur_iter % opt.freq_save_latest == 0:
+    #     utils.save_networks(opt, cur_iter, model, latest=True)
+    if epoch % opt.freq_fid == 0 and cur_iter > 0:
+        print()
+        print("Calculating metrics..")
+        metrics = calc_metrics.get_metrics(opt, model, dataloader_val, epoch)
+
+        if all(metrics['FID'] < i for i in fid_scores):
+            print(f"Saving best network in epoch {epoch} and cur_iter {cur_iter}..")
+            print()
+            utils.save_networks(opt, cur_iter, model, best=True)
+
+        fid_scores.append(metrics['FID'])
+
+        metric_df = metric_df.append({"Epoch" : epoch}, ignore_index=True)
+
+        for key, value in metrics.items():
+            metric_df.loc[metric_df["Epoch"]== epoch, key] = value
+
+        
 
 #--- after training ---#
 utils.update_EMA(model, cur_iter, dataloader, opt, force_run_stats=True)
 utils.save_networks(opt, cur_iter, model)
 utils.save_networks(opt, cur_iter, model, latest=True)
-is_best = fid_computer.update(model, cur_iter)
-if is_best:
-    utils.save_networks(opt, cur_iter, model, best=True)
+
+metric_df.to_csv(os.path.join(opt.checkpoints_dir, 'metrics.csv'), index=False)
 
 print("The training has successfully finished")
 
